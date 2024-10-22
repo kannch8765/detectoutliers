@@ -1,0 +1,7 @@
+Package name: detectoutliers
+Version: 1.0.0
+Author: Your Name
+Requires: Stata 16.0
+
+ADO-files: detectoutliers.ado
+Help-files: detectoutliers.sthlp
