@@ -1,0 +1,25 @@
+// pkg/stata.toc
+v 3
+d detectoutliers - Detection and handling of outliers in numeric variables
+d
+d Author: Your Name
+d Distribution-Date: 20241022
+d
+d Detects and handles outliers in numeric variables using either Z-score or IQR methods,
+d with automatic trend detection and visualization options.
+p detectoutliers Detect and handle outliers in numeric variables
+
+// pkg/detectoutliers.pkg
+v 3
+d detectoutliers - Detection and handling of outliers in numeric variables
+d
+d Author: Your Name
+d Distribution-Date: 20241022
+d
+d Detects and handles outliers in numeric variables using either Z-score or IQR methods,
+d with automatic trend detection and visualization options.
+d
+d Support: your@email.com
+d
+f detectoutliers.ado
+f detectoutliers.sthlp
