@@ -1,7 +1,6 @@
 program define detectoutliers
     version 14  
     
-    * Define syntax with proper option handling
     syntax varlist(numeric) , METHOD(string) ///
         [ ACTION(string) ///
           VISualize(string) ///
@@ -42,16 +41,23 @@ program define detectoutliers
         }
         
         // Create temporary variables for analysis
-        tempvar obsnum resid pred
+        tempvar obsnum resid pred zscore
         qui gen `obsnum' = _n
+        
+        // Initial summary for sanity check
+        qui summ `var', detail
+        local initial_sd = r(sd)
+        local initial_iqr = r(p75) - r(p25)
         
         // Check for trend
         qui regress `var' `obsnum'
         local t = abs(_b[`obsnum']/_se[`obsnum'])
         local df = e(df_r)
         local pvalue = 2*ttail(`df',`t')
+        local slope = _b[`obsnum']
         
-        if (`pvalue' < 0.05) {
+        // Only apply detrending if significant trend and meaningful slope
+        if (`pvalue' < 0.05) & (abs(`slope') > `initial_sd'/1000) {
             di as text "Trend detected in `var', applying detrending method"
             
             qui {
@@ -59,124 +65,102 @@ program define detectoutliers
                 predict `resid', residuals
                 
                 if "`method'" == "zscore" {
-                    summarize `resid', detail
-                    local mean = r(mean)
-                    local sd = r(sd)
-                    
-                    if "`action'" == "flag" {
-                        gen byte `var'_outlier = abs(`resid' - `mean')/`sd' > 3 ///
-                            if !missing(`var')
-                        replace `var'_outlier = . if missing(`var') & "`nodropmissing'" == ""
-                        label variable `var'_outlier "`var' outliers (detrended z-score)"
-                        qui count if `var'_outlier == 1
-                        di as text "Outliers in `var' flagged using detrended Z-scores"
-                        di as text "Number of outliers: " r(N)
-                    }
-                    else {
-                        drop if abs(`resid' - `mean')/`sd' > 3 & !missing(`var')
-                        di as text "Outliers in `var' removed using detrended Z-scores"
-                    }
+                    // Generate z-scores from residuals
+                    egen `zscore' = std(`resid')
+                    gen byte `var'_outlier = abs(`zscore') > 3 if !missing(`var')
                 }
                 else {  // IQR method
                     summarize `resid', detail
                     local iqr = r(p75) - r(p25)
-                    local lower = r(p25) - 1.5 * `iqr'
-                    local upper = r(p75) + 1.5 * `iqr'
-                    
-                    if "`action'" == "flag" {
+                    // Only proceed if IQR is non-zero
+                    if (`iqr' > 0) {
+                        local lower = r(p25) - 1.5 * `iqr'
+                        local upper = r(p75) + 1.5 * `iqr'
                         gen byte `var'_outlier = (`resid' < `lower' | `resid' > `upper') ///
                             if !missing(`var')
-                        replace `var'_outlier = . if missing(`var') & "`nodropmissing'" == ""
-                        label variable `var'_outlier "`var' outliers (detrended IQR)"
-                        qui count if `var'_outlier == 1
-                        di as text "Outliers in `var' flagged using IQR"
-                        di as text "Number of outliers: " r(N)
                     }
                     else {
-                        drop if (`resid' < `lower' | `resid' > `upper') & !missing(`var')
-                        di as text "Outliers in `var' removed using IQR"
+                        // Fall back to global method if IQR is zero
+                        di as text "Warning: Zero IQR in residuals, falling back to global method"
+                        local pvalue = 1  // Force global method
                     }
                 }
             }
         }
         else {
-            di as text "No significant trend detected in `var', applying global method"
+            di as text "Using global method for `var'"
             
             qui {
                 if "`method'" == "zscore" {
-                    summarize `var', detail
-                    local mean = r(mean)
-                    local sd = r(sd)
-                    
-                    if "`action'" == "flag" {
-                        gen byte `var'_outlier = abs((`var' - `mean')/`sd') > 3 ///
-                            if !missing(`var')
-                        replace `var'_outlier = . if missing(`var') & "`nodropmissing'" == ""
-                        label variable `var'_outlier "`var' outliers (global z-score)"
-                        qui count if `var'_outlier == 1
-                        di as text "Outliers in `var' flagged using global Z-scores"
-                        di as text "Number of outliers: " r(N)
-                    }
-                    else {
-                        drop if abs((`var' - `mean')/`sd') > 3 & !missing(`var')
-                        di as text "Outliers in `var' removed using global Z-scores"
-                    }
+                    // Generate z-scores directly
+                    egen `zscore' = std(`var')
+                    gen byte `var'_outlier = abs(`zscore') > 3 if !missing(`var')
                 }
                 else {  // IQR method
                     summarize `var', detail
                     local iqr = r(p75) - r(p25)
-                    local lower = r(p25) - 1.5 * `iqr'
-                    local upper = r(p75) + 1.5 * `iqr'
-                    
-                    if "`action'" == "flag" {
+                    if (`iqr' > 0) {
+                        local lower = r(p25) - 1.5 * `iqr'
+                        local upper = r(p75) + 1.5 * `iqr'
                         gen byte `var'_outlier = (`var' < `lower' | `var' > `upper') ///
                             if !missing(`var')
-                        replace `var'_outlier = . if missing(`var') & "`nodropmissing'" == ""
-                        label variable `var'_outlier "`var' outliers (global IQR)"
-                        qui count if `var'_outlier == 1
-                        di as text "Outliers in `var' flagged using IQR"
-                        di as text "Number of outliers: " r(N)
                     }
                     else {
-                        drop if (`var' < `lower' | `var' > `upper') & !missing(`var')
-                        di as text "Outliers in `var' removed using IQR"
+                        di as error "Error: Zero IQR in data"
+                        exit 198
                     }
                 }
             }
         }
-
-        // Visualization with improved display
+        
+        // Label and summarize results
+        label variable `var'_outlier "`var' outliers"
+        qui count if `var'_outlier == 1
+        local n_outliers = r(N)
+        qui count if !missing(`var')
+        local n_total = r(N)
+        local pct_outliers = `n_outliers'/`n_total'*100
+        
+        di as text _newline "Results for `var':"
+        di as text "Number of outliers: " as result `n_outliers'
+        di as text "Percentage of outliers: " as result %5.1f `pct_outliers' "%"
+        
+        // Visualization
         if "`visualize'" != "" {
             if "`visualize'" == "scatter" {
-                // Sort data for better visualization
-                tempvar sorted_obs
-                gen `sorted_obs' = _n
+                // Create jittered variable for better visualization
+                tempvar jitter xjitter
+                qui {
+                    // Add small random noise for y-axis (proportional to data range)
+                    summarize `var', detail
+                    local range = r(p99) - r(p1)
+                    local jitter_amount = `range' / 100
+                    gen `jitter' = `var' + (runiform(-`jitter_amount', `jitter_amount')) if !missing(`var')
+                    
+                    // Add small random noise for x-axis
+                    gen `xjitter' = `obsnum' + (runiform(-1000, 1000))
+                }
                 
-                // Enhanced scatter plot
-                twoway (scatter `var' `sorted_obs' if `var'_outlier == 0, ///
-                        msymbol(circle) mcolor(blue) msize(small)) ///
-                       (scatter `var' `sorted_obs' if `var'_outlier == 1, ///
-                        msymbol(circle) mcolor(red) msize(small)), ///
+                // Enhanced scatter plot with jittered points
+                twoway (scatter `jitter' `xjitter' if `var'_outlier == 0, ///
+                        msymbol(circle) mcolor(blue%30) msize(vsmall)) /// Use transparency
+                       (scatter `jitter' `xjitter' if `var'_outlier == 1, ///
+                        msymbol(circle) mcolor(red%50) msize(small)), /// Use transparency
                        legend(order(1 "Normal" 2 "Outlier")) ///
                        title("Scatter plot of `var' with Outliers Highlighted") ///
                        ytitle("`var'") xtitle("Observation Number") ///
-                       ylabel(, angle(0)) ///
-                       name(`var'_outliers, replace)
+                       ylabel(, angle(0)) name(`var'_outliers, replace)
                 
-                // Display additional statistics
-                di as text _newline "Summary of `var':"
+                // Display distribution statistics
+                di as text _newline "Distribution of normal observations:"
                 summarize `var' if `var'_outlier == 0, detail
-                di as text _newline "Summary of outliers:"
+                di as text _newline "Distribution of outliers:"
                 summarize `var' if `var'_outlier == 1, detail
             }
-            else if "`visualize'" == "box" {
+            else {  // box plot
                 graph box `var', ///
                     title("Box plot of `var' with Outliers") ///
                     name(`var'_box, replace)
-                
-                // Display summary statistics for box plot
-                di as text _newline "Distribution statistics:"
-                summarize `var', detail
             }
         }
     }
