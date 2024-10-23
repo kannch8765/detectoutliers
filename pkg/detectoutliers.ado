@@ -145,18 +145,38 @@ program define detectoutliers
             }
         }
 
-        // Visualization
+        // Visualization with improved display
         if "`visualize'" != "" {
             if "`visualize'" == "scatter" {
-                twoway (scatter `var' `obsnum' if `var'_outlier == 0, msymbol(circle) mcolor(blue)) ///
-                       (scatter `var' `obsnum' if `var'_outlier == 1, msymbol(circle) mcolor(red)), ///
+                // Sort data for better visualization
+                tempvar sorted_obs
+                gen `sorted_obs' = _n
+                
+                // Enhanced scatter plot
+                twoway (scatter `var' `sorted_obs' if `var'_outlier == 0, ///
+                        msymbol(circle) mcolor(blue) msize(small)) ///
+                       (scatter `var' `sorted_obs' if `var'_outlier == 1, ///
+                        msymbol(circle) mcolor(red) msize(small)), ///
                        legend(order(1 "Normal" 2 "Outlier")) ///
                        title("Scatter plot of `var' with Outliers Highlighted") ///
-                       ytitle("`var'") xtitle("Observation Number")
+                       ytitle("`var'") xtitle("Observation Number") ///
+                       ylabel(, angle(0)) ///
+                       name(`var'_outliers, replace)
+                
+                // Display additional statistics
+                di as text _newline "Summary of `var':"
+                summarize `var' if `var'_outlier == 0, detail
+                di as text _newline "Summary of outliers:"
+                summarize `var' if `var'_outlier == 1, detail
             }
             else if "`visualize'" == "box" {
                 graph box `var', ///
-                    title("Box plot of `var' with Outliers")
+                    title("Box plot of `var' with Outliers") ///
+                    name(`var'_box, replace)
+                
+                // Display summary statistics for box plot
+                di as text _newline "Distribution statistics:"
+                summarize `var', detail
             }
         }
     }
