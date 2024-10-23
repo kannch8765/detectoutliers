@@ -35,85 +35,80 @@ program define detectoutliers
             exit 110
         }
         
-        // Drop existing outlier variable if replace option specified
         if !_rc & "`replace'" != "" {
             drop `var'_outlier
         }
         
-        // Create temporary variables for analysis
-        tempvar obsnum resid pred zscore
-        qui gen `obsnum' = _n
+        // Create observation index
+        tempvar obs_index
+        gen `obs_index' = _n
         
-        // Initial summary for sanity check
+        // Initial summary for data checks
         qui summ `var', detail
+        local initial_mean = r(mean)
         local initial_sd = r(sd)
         local initial_iqr = r(p75) - r(p25)
         
-        // Check for trend
-        qui regress `var' `obsnum'
-        local t = abs(_b[`obsnum']/_se[`obsnum'])
-        local df = e(df_r)
-        local pvalue = 2*ttail(`df',`t')
-        local slope = _b[`obsnum']
-        
-        // Only apply detrending if significant trend and meaningful slope
-        if (`pvalue' < 0.05) & (abs(`slope') > `initial_sd'/1000) {
-            di as text "Trend detected in `var', applying detrending method"
+        // Check for trend using centered time variable
+        tempvar time_c resid pred trend_removed
+        qui {
+            // Center time to improve numerical stability
+            egen `time_c' = std(`obs_index')
             
-            qui {
-                predict `pred'
-                predict `resid', residuals
-                
-                if "`method'" == "zscore" {
-                    // Generate z-scores from residuals
-                    egen `zscore' = std(`resid')
-                    gen byte `var'_outlier = abs(`zscore') > 3 if !missing(`var')
-                }
-                else {  // IQR method
-                    summarize `resid', detail
-                    local iqr = r(p75) - r(p25)
-                    // Only proceed if IQR is non-zero
-                    if (`iqr' > 0) {
-                        local lower = r(p25) - 1.5 * `iqr'
-                        local upper = r(p75) + 1.5 * `iqr'
-                        gen byte `var'_outlier = (`resid' < `lower' | `resid' > `upper') ///
-                            if !missing(`var')
-                    }
-                    else {
-                        // Fall back to global method if IQR is zero
-                        di as text "Warning: Zero IQR in residuals, falling back to global method"
-                        local pvalue = 1  // Force global method
-                    }
-                }
-            }
+            // Fit trend model
+            reg `var' `time_c'
+            predict `pred'
+            predict `resid', residuals
+            
+            // Calculate trend significance
+            local t = abs(_b[`time_c']/_se[`time_c'])
+            local df = e(df_r)
+            local pvalue = 2*ttail(`df',`t')
+            local slope = _b[`time_c']
+            
+            // Calculate relative trend magnitude
+            local trend_magnitude = abs(`slope'*r(sd)) / `initial_sd'
+        }
+        
+        // Determine if trend is both statistically and practically significant
+        if (`pvalue' < 0.05) & (`trend_magnitude' > 0.1) {
+            di as text "Significant trend detected in `var', applying detrending"
+            local use_detrended = 1
+            gen `trend_removed' = `resid'
         }
         else {
-            di as text "Using global method for `var'"
+            di as text "No significant trend detected in `var', using original values"
+            local use_detrended = 0
+            gen `trend_removed' = `var'
+        }
+        
+        // Apply outlier detection to appropriate series
+        if "`method'" == "zscore" {
+            tempvar zscore
+            qui egen `zscore' = std(`trend_removed')
+            qui gen byte `var'_outlier = abs(`zscore') > 3 if !missing(`var')
             
-            qui {
-                if "`method'" == "zscore" {
-                    // Generate z-scores directly
-                    egen `zscore' = std(`var')
-                    gen byte `var'_outlier = abs(`zscore') > 3 if !missing(`var')
-                }
-                else {  // IQR method
-                    summarize `var', detail
-                    local iqr = r(p75) - r(p25)
-                    if (`iqr' > 0) {
-                        local lower = r(p25) - 1.5 * `iqr'
-                        local upper = r(p75) + 1.5 * `iqr'
-                        gen byte `var'_outlier = (`var' < `lower' | `var' > `upper') ///
-                            if !missing(`var')
-                    }
-                    else {
-                        di as error "Error: Zero IQR in data"
-                        exit 198
-                    }
-                }
+            di as text "Using z-score method (threshold = 3)"
+        }
+        else {  // IQR method
+            qui summ `trend_removed', detail
+            local iqr = r(p75) - r(p25)
+            
+            if (`iqr' > 0) {
+                local lower = r(p25) - 1.5 * `iqr'
+                local upper = r(p75) + 1.5 * `iqr'
+                qui gen byte `var'_outlier = (`trend_removed' < `lower' | `trend_removed' > `upper') ///
+                    if !missing(`var')
+                    
+                di as text "Using IQR method (1.5 × IQR)"
+            }
+            else {
+                di as error "Error: Zero IQR in data"
+                exit 198
             }
         }
         
-        // Label and summarize results
+        // Label and report results
         label variable `var'_outlier "`var' outliers"
         qui count if `var'_outlier == 1
         local n_outliers = r(N)
@@ -128,27 +123,11 @@ program define detectoutliers
         // Visualization
         if "`visualize'" != "" {
             if "`visualize'" == "scatter" {
-                // Create jittered variables for better visualization
-                tempvar jitter xjitter
-                qui {
-                    // Add proportional random noise for y-axis
-                    summarize `var', detail
-                    local range = r(max) - r(min)
-                    local jitter_amount = `range' / 50  // Increased jitter amount
-                    gen `jitter' = `var' + (runiform(-`jitter_amount', `jitter_amount')) if !missing(`var')
-                    
-                    // Add proportional random noise for x-axis based on number of observations
-                    count
-                    local n_obs = r(N)
-                    local x_jitter = `n_obs' / 50
-                    gen `xjitter' = `obsnum' + (runiform(-`x_jitter', `x_jitter'))
-                }
-                
-                // Enhanced scatter plot with better jittering and transparency
-                twoway (scatter `jitter' `xjitter' if `var'_outlier == 0, ///
-                        msymbol(circle) mcolor(blue%15) msize(tiny)) /// More transparency, smaller points
-                       (scatter `jitter' `xjitter' if `var'_outlier == 1, ///
-                        msymbol(circle) mcolor(red%25) msize(vsmall)), /// More transparency
+                // Basic scatter plot without jittering for clearer view of actual patterns
+                twoway (scatter `var' `obs_index' if `var'_outlier == 0, ///
+                        msymbol(circle) mcolor(blue%30) msize(tiny)) ///
+                       (scatter `var' `obs_index' if `var'_outlier == 1, ///
+                        msymbol(circle) mcolor(red%50) msize(vsmall)), ///
                     legend(order(1 "Normal" 2 "Outlier")) ///
                     title("Scatter plot of `var' with Outliers Highlighted") ///
                     ytitle("`var'") xtitle("Observation Number") ///
@@ -166,5 +145,5 @@ program define detectoutliers
                     name(`var'_box, replace)
             }
         }
-        }
+    }
 end
