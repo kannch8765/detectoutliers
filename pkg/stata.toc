@@ -1,25 +1,24 @@
-// pkg/stata.toc
 v 3
-d detectoutliers - Detection and handling of outliers in numeric variables
+d detectoutliers
 d
-d Author: Your Name
+d Detection and handling of outliers in numeric variables
+d
 d Distribution-Date: 20241022
-d
-d Detects and handles outliers in numeric variables using either Z-score or IQR methods,
-d with automatic trend detection and visualization options.
+d Author: Your Name
 p detectoutliers Detect and handle outliers in numeric variables
 
 // pkg/detectoutliers.pkg
 v 3
-d detectoutliers - Detection and handling of outliers in numeric variables
+d detectoutliers - Stata module for outlier detection
 d
 d Author: Your Name
-d Distribution-Date: 20241022
-d
-d Detects and handles outliers in numeric variables using either Z-score or IQR methods,
-d with automatic trend detection and visualization options.
-d
 d Support: your@email.com
 d
-f detectoutliers.ado
-f detectoutliers.sthlp
+d Distribution-Date: 20241022
+d
+d This module detects and handles outliers in numeric variables
+d using either Z-score or IQR methods, with automatic trend detection
+d and visualization options.
+d
+F detectoutliers.ado
+F detectoutliers.sthlp
