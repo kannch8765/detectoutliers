@@ -39,6 +39,14 @@ program define detectoutliers
             drop `var'_outlier
         }
         
+        // Set missing value condition
+        if "`nodropmissing'" == "" {
+            local missing_cond "& !missing(`var')"
+        }
+        else {
+            local missing_cond ""
+        }
+        
         // Create observation index and store original values
         tempvar obs_index original_values
         gen `obs_index' = _n
@@ -91,16 +99,17 @@ program define detectoutliers
         qui count
         local n_total = r(N)
         
-        // Define data type thresholds
-        local discrete_threshold = 100
-        local semi_discrete_ratio = 10
+        // Define data type thresholds with explicit numeric comparisons
+        local DISCRETE_THRESHOLD 100
+        local SEMI_DISCRETE_RATIO 10
+        local semi_discrete_bound = floor(`n_total'/`SEMI_DISCRETE_RATIO')
         
         // Determine data type
-        if `n_distinct' <= `discrete_threshold' {
+        if `n_distinct' <= `DISCRETE_THRESHOLD' {
             local data_type "discrete"
             di as text "Detected discrete data with `n_distinct' unique values"
         }
-        else if `n_distinct' <= `n_total'/`semi_discrete_ratio' {
+        else if `n_distinct' <= `semi_discrete_bound' {
             local data_type "semi-discrete"
             di as text "Detected semi-discrete data with `n_distinct' unique values"
         }
@@ -109,36 +118,42 @@ program define detectoutliers
             di as text "Detected continuous data"
         }
         
-        // Apply outlier detection to appropriate series
+        // Apply outlier detection with better error handling
         tempvar outlier_indicator
         if "`method'" == "zscore" {
             tempvar zscore
-            qui egen `zscore' = std(`trend_removed')
-            qui gen byte `outlier_indicator' = abs(`zscore') > 3 if !missing(`var')
-            
-            // Store thresholds for reporting
-            local upper_threshold = `initial_mean' + 3*`initial_sd'
-            local lower_threshold = `initial_mean' - 3*`initial_sd'
+            qui {
+                egen `zscore' = std(`trend_removed')
+                gen byte `outlier_indicator' = 0
+                replace `outlier_indicator' = 1 if abs(`zscore') > 3 `missing_cond'
+                
+                // Store thresholds for reporting
+                local upper_threshold = `initial_mean' + 3*`initial_sd'
+                local lower_threshold = `initial_mean' - 3*`initial_sd'
+            }
             
             di as text "Using z-score method (threshold = 3)"
         }
         else {  // IQR method
-            qui summ `trend_removed', detail
-            local iqr = r(p75) - r(p25)
-            
-            if (`iqr' > 0) {
+            qui {
+                summ `trend_removed', detail
+                local iqr = r(p75) - r(p25)
+                
+                if (`iqr' <= 0) {
+                    di as error "Error: Zero or negative IQR in data"
+                    exit 198
+                }
+                
                 local lower_threshold = r(p25) - 1.5 * `iqr'
                 local upper_threshold = r(p75) + 1.5 * `iqr'
-                qui gen byte `outlier_indicator' = ///
-                    (`trend_removed' < `lower_threshold' | `trend_removed' > `upper_threshold') ///
-                    if !missing(`var')
-                    
-                di as text "Using IQR method (1.5 × IQR)"
+                
+                gen byte `outlier_indicator' = 0
+                replace `outlier_indicator' = 1 if ///
+                    (`trend_removed' < `lower_threshold' | ///
+                     `trend_removed' > `upper_threshold') `missing_cond'
             }
-            else {
-                di as error "Error: Zero IQR in data"
-                exit 198
-            }
+            
+            di as text "Using IQR method (1.5 × IQR)"
         }
         
         // Generate final outlier indicator
@@ -166,20 +181,24 @@ program define detectoutliers
                     // For truly discrete data
                     tempvar jitter_y freq
                     
-                    // Calculate frequencies for sizing
-                    bysort `var': gen `freq' = _N
-                    qui sum `freq'
-                    local max_freq = r(max)
-                    
-                    // Jitter proportional to frequency
+                    // Calculate frequencies with error checking
                     qui {
-                        local jitter_amount = (`upper_threshold' - `lower_threshold') / 100
+                        bysort `var': gen `freq' = _N
+                        sum `freq'
+                        if r(N) == 0 {
+                            di as error "Error: No valid frequencies calculated"
+                            exit 198
+                        }
+                        local max_freq = r(max)
+                        
+                        // Safer jitter calculation
+                        local jitter_amount = max((`upper_threshold' - `lower_threshold') / 100, 0.0001)
                         gen `jitter_y' = `original_values' + ///
                             (runiform(-`jitter_amount', `jitter_amount') * ///
                             (`freq'/`max_freq'))
                     }
                     
-                    // Plot with frequency-based transparency
+                    // Plot with improved aesthetics
                     twoway (scatter `jitter_y' `obs_index' if `var'_outlier == 0, ///
                             msymbol(circle) mcolor(blue%30) msize(tiny)) ///
                            (scatter `jitter_y' `obs_index' if `var'_outlier == 1, ///
@@ -188,7 +207,10 @@ program define detectoutliers
                         title("Scatter plot of `var' with Outliers Highlighted") ///
                         subtitle("(`n_distinct' unique values)") ///
                         ytitle("`var'") xtitle("Observation Number") ///
-                        ylabel(, angle(0)) name(`var'_outliers, replace)
+                        ylabel(, angle(0) grid) ///
+                        xlabel(, grid) ///
+                        graphregion(color(white)) ///
+                        name(`var'_outliers, replace)
                 }
                 else if "`data_type'" == "semi-discrete" {
                     // For age-like variables
@@ -200,7 +222,10 @@ program define detectoutliers
                         title("Scatter plot of `var' with Outliers Highlighted") ///
                         subtitle("(`n_distinct' unique values)") ///
                         ytitle("`var'") xtitle("Observation Number") ///
-                        ylabel(, angle(0)) name(`var'_outliers, replace)
+                        ylabel(, angle(0) grid) ///
+                        xlabel(, grid) ///
+                        graphregion(color(white)) ///
+                        name(`var'_outliers, replace)
                 }
                 else {
                     // For continuous data
@@ -211,12 +236,16 @@ program define detectoutliers
                         legend(order(1 "Normal" 2 "Outlier")) ///
                         title("Scatter plot of `var' with Outliers Highlighted") ///
                         ytitle("`var'") xtitle("Observation Number") ///
-                        ylabel(, angle(0)) name(`var'_outliers, replace)
+                        ylabel(, angle(0) grid) ///
+                        xlabel(, grid) ///
+                        graphregion(color(white)) ///
+                        name(`var'_outliers, replace)
                 }
             }
             else {  // box plot
                 graph box `var', ///
                     title("Box plot of `var' with Outliers") ///
+                    graphregion(color(white)) ///
                     name(`var'_box, replace)
             }
             
