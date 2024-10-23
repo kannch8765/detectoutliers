@@ -1,15 +1,16 @@
 program define detectoutliers
-    version 14
+    version 14  
     
-    syntax varlist(numeric), METHOD(string) [ACTION(string) VISUALIZE(string) ///
-        REPLACE FORCE NODROPmissing]
+    * Define syntax with proper option handling
+    syntax varlist(numeric) , METHOD(string) ///
+        [ ACTION(string) ///
+          VISualize(string) ///
+          REPLACE ///
+          FORCE ///
+          NODROPmissing ]
     
     // Method validation
-    if ("`method'" == "") {
-        di as error "You must specify a method: zscore or iqr."
-        exit 198
-    }
-    if ("`method'" != "zscore" & "`method'" != "iqr") {
+    if !inlist("`method'", "zscore", "iqr") {
         di as error "Invalid method: specify zscore or iqr."
         exit 198
     }
@@ -40,12 +41,12 @@ program define detectoutliers
             drop `var'_outlier
         }
         
-        // Create temporary variables for observation number and calculations
+        // Create temporary variables for analysis
         tempvar obsnum resid pred
-        gen `obsnum' = _n
+        qui gen `obsnum' = _n
         
         // Check for trend
-        quietly regress `var' `obsnum'
+        qui regress `var' `obsnum'
         local t = abs(_b[`obsnum']/_se[`obsnum'])
         local df = e(df_r)
         local pvalue = 2*ttail(`df',`t')
@@ -53,7 +54,7 @@ program define detectoutliers
         if (`pvalue' < 0.05) {
             di as text "Trend detected in `var', applying detrending method"
             
-            quietly {
+            qui {
                 predict `pred'
                 predict `resid', residuals
                 
@@ -71,7 +72,7 @@ program define detectoutliers
                         di as text "Outliers in `var' flagged using detrended Z-scores"
                         di as text "Number of outliers: " r(N)
                     }
-                    else if "`action'" == "remove" {
+                    else {
                         drop if abs(`resid' - `mean')/`sd' > 3 & !missing(`var')
                         di as text "Outliers in `var' removed using detrended Z-scores"
                     }
@@ -91,7 +92,7 @@ program define detectoutliers
                         di as text "Outliers in `var' flagged using IQR"
                         di as text "Number of outliers: " r(N)
                     }
-                    else if "`action'" == "remove" {
+                    else {
                         drop if (`resid' < `lower' | `resid' > `upper') & !missing(`var')
                         di as text "Outliers in `var' removed using IQR"
                     }
@@ -101,7 +102,7 @@ program define detectoutliers
         else {
             di as text "No significant trend detected in `var', applying global method"
             
-            quietly {
+            qui {
                 if "`method'" == "zscore" {
                     summarize `var', detail
                     local mean = r(mean)
@@ -116,7 +117,7 @@ program define detectoutliers
                         di as text "Outliers in `var' flagged using global Z-scores"
                         di as text "Number of outliers: " r(N)
                     }
-                    else if "`action'" == "remove" {
+                    else {
                         drop if abs((`var' - `mean')/`sd') > 3 & !missing(`var')
                         di as text "Outliers in `var' removed using global Z-scores"
                     }
@@ -136,7 +137,7 @@ program define detectoutliers
                         di as text "Outliers in `var' flagged using IQR"
                         di as text "Number of outliers: " r(N)
                     }
-                    else if "`action'" == "remove" {
+                    else {
                         drop if (`var' < `lower' | `var' > `upper') & !missing(`var')
                         di as text "Outliers in `var' removed using IQR"
                     }
