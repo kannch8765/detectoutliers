@@ -121,17 +121,67 @@ program define detectoutliers
         di as text "Percentage of outliers: " as result %5.1f `pct_outliers' "%"
         
         // Visualization
+        // Check data type (discrete vs continuous)
+        tempvar distinct_vals
+        qui duplicates tag `var', gen(`distinct_vals')
+        qui sum `distinct_vals'
+        local n_distinct = r(max) + 1
+        qui count
+        local n_total = r(N)
+        local discrete_data = `n_distinct' < `n_total' / 10
+        
+        // Report data characteristics
+        if `discrete_data' {
+            di as text "Detected discrete data with `n_distinct' unique values"
+        }
+        else {
+            di as text "Detected continuous data"
+        }
+
+        // Visualization
         if "`visualize'" != "" {
             if "`visualize'" == "scatter" {
-                // Basic scatter plot without jittering for clearer view of actual patterns
-                twoway (scatter `var' `obs_index' if `var'_outlier == 0, ///
-                        msymbol(circle) mcolor(blue%30) msize(tiny)) ///
-                       (scatter `var' `obs_index' if `var'_outlier == 1, ///
-                        msymbol(circle) mcolor(red%50) msize(vsmall)), ///
-                    legend(order(1 "Normal" 2 "Outlier")) ///
-                    title("Scatter plot of `var' with Outliers Highlighted") ///
-                    ytitle("`var'") xtitle("Observation Number") ///
-                    ylabel(, angle(0)) name(`var'_outliers, replace)
+                if `discrete_data' {
+                    // For discrete data, use special visualization
+                    tempvar jitter_y freq
+                    
+                    // Calculate frequencies for sizing
+                    bysort `var': gen `freq' = _N
+                    qui sum `freq'
+                    local max_freq = r(max)
+                    
+                    // Create minimal jitter for discrete data
+                    qui {
+                        summarize `var', detail
+                        local range = r(max) - r(min)
+                        local jitter_amount = `range' / 200  // Very small jitter
+                        gen `jitter_y' = `var' + ///
+                            (runiform(-`jitter_amount', `jitter_amount') * ///
+                            (`freq'/`max_freq'))  // Scale jitter by frequency
+                    }
+                    
+                    // Plot with frequency-based transparency
+                    twoway (scatter `jitter_y' `obs_index' if `var'_outlier == 0, ///
+                            msymbol(circle) mcolor(blue%20) msize(tiny)) ///
+                           (scatter `jitter_y' `obs_index' if `var'_outlier == 1, ///
+                            msymbol(circle) mcolor(red%40) msize(vsmall)), ///
+                        legend(order(1 "Normal" 2 "Outlier")) ///
+                        title("Scatter plot of `var' with Outliers Highlighted") ///
+                        subtitle("(`n_distinct' unique values)") ///
+                        ytitle("`var'") xtitle("Observation Number") ///
+                        ylabel(, angle(0)) name(`var'_outliers, replace)
+                }
+                else {
+                    // For continuous data, use regular scatter
+                    twoway (scatter `var' `obs_index' if `var'_outlier == 0, ///
+                            msymbol(circle) mcolor(blue%30) msize(tiny)) ///
+                           (scatter `var' `obs_index' if `var'_outlier == 1, ///
+                            msymbol(circle) mcolor(red%50) msize(vsmall)), ///
+                        legend(order(1 "Normal" 2 "Outlier")) ///
+                        title("Scatter plot of `var' with Outliers Highlighted") ///
+                        ytitle("`var'") xtitle("Observation Number") ///
+                        ylabel(, angle(0)) name(`var'_outliers, replace)
+                }
                 
                 // Display distribution statistics
                 di as text _newline "Distribution of normal observations:"
