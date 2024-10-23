@@ -126,30 +126,31 @@ program define detectoutliers
         di as text "Percentage of outliers: " as result %5.1f `pct_outliers' "%"
         
         // Visualization
-        if "`visualize'" != "" {
-            if "`visualize'" == "scatter" {
-                // Create jittered variable for better visualization
-                tempvar jitter xjitter
-                qui {
-                    // Add small random noise for y-axis (proportional to data range)
-                    summarize `var', detail
-                    local range = r(p99) - r(p1)
-                    local jitter_amount = `range' / 100
-                    gen `jitter' = `var' + (runiform(-`jitter_amount', `jitter_amount')) if !missing(`var')
-                    
-                    // Add small random noise for x-axis
-                    gen `xjitter' = `obsnum' + (runiform(-1000, 1000))
-                }
+        if "`visualize'" == "scatter" {
+            // Create jittered variables for better visualization
+            tempvar jitter xjitter
+            qui {
+                // Add proportional random noise for y-axis
+                summarize `var', detail
+                local range = r(max) - r(min)
+                local jitter_amount = `range' / 50  // Increased jitter amount
+                gen `jitter' = `var' + (runiform(-`jitter_amount', `jitter_amount')) if !missing(`var')
                 
-                // Enhanced scatter plot with jittered points
-                twoway (scatter `jitter' `xjitter' if `var'_outlier == 0, ///
-                        msymbol(circle) mcolor(blue%30) msize(vsmall)) /// Use transparency
-                       (scatter `jitter' `xjitter' if `var'_outlier == 1, ///
-                        msymbol(circle) mcolor(red%50) msize(small)), /// Use transparency
-                       legend(order(1 "Normal" 2 "Outlier")) ///
-                       title("Scatter plot of `var' with Outliers Highlighted") ///
-                       ytitle("`var'") xtitle("Observation Number") ///
-                       ylabel(, angle(0)) name(`var'_outliers, replace)
+                // Add proportional random noise for x-axis based on number of observations
+                count
+                local n_obs = r(N)
+                local x_jitter = `n_obs' / 50
+                gen `xjitter' = `obsnum' + (runiform(-`x_jitter', `x_jitter'))
+            }
+            
+            // Enhanced scatter plot with better jittering and transparency
+            twoway (scatter `jitter' `xjitter' if `var'_outlier == 0, ///
+                    msymbol(circle) mcolor(blue%15) msize(tiny)) /// More transparency, smaller points
+                (scatter `jitter' `xjitter' if `var'_outlier == 1, ///
+                    msymbol(circle) mcolor(red%25) msize(vsmall)), /// More transparency
+                legend(order(1 "Normal" 2 "Outlier")) ///
+                title("Scatter plot of `var' with Outliers Highlighted") ///
+                ytitle("`var'") xtitle("Observation Number") ///
                 
                 // Display distribution statistics
                 di as text _newline "Distribution of normal observations:"
@@ -157,11 +158,11 @@ program define detectoutliers
                 di as text _newline "Distribution of outliers:"
                 summarize `var' if `var'_outlier == 1, detail
             }
+
             else {  // box plot
                 graph box `var', ///
                     title("Box plot of `var' with Outliers") ///
                     name(`var'_box, replace)
             }
         }
-    }
 end
