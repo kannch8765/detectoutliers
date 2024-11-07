@@ -1,2 +1,0 @@
-detectoutliers.ado
-detectoutliers.sthlp
