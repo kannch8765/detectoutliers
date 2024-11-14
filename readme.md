@@ -40,7 +40,7 @@ Options:
 
 ## Installation
 * Use `net install` from GitHub 
-net install detectoutliers, from(https://raw.githubusercontent.com/kannch8765/detectoutliers/master/)
+net install detectoutliers, from(https://raw.githubusercontent.com/kannch8765/detectoutliers/main/pkg)
 
 * Or manually copy files to your personal ado directory:
   * detectoutliers.ado
