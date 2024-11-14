@@ -39,15 +39,17 @@ Options:
 ```
 
 ## Installation
-* Use `net install` from GitHub 
+* Use `net install` from GitHub
+```stata
 net install detectoutliers, from(https://raw.githubusercontent.com/kannch8765/detectoutliers/main/pkg)
+```
 
 * Or manually copy files to your personal ado directory:
   * detectoutliers.ado
   * detectoutliers.sthlp
 
 ## Sample Usage
-```
+```stata
 * Basic usage with Z-score method
 detectoutliers income, method(zscore)
 
