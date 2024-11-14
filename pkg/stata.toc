@@ -11,10 +11,9 @@ p detectoutliers Detect and handle outliers in numeric variables
 v 3
 d detectoutliers - Stata module for outlier detection
 d
-d Author: Your Name
-d Support: your@email.com
+d Author: Cao Han, Li Minfeng, Jordan Rayman Thomas
 d
-d Distribution-Date: 20241022
+d Distribution-Date: 20241115
 d
 d This module detects and handles outliers in numeric variables
 d using either Z-score or IQR methods, with automatic trend detection

@@ -1,5 +1,5 @@
 program define detectoutliers
-    version 14  
+    version 14  // minimum stata version
     
     syntax varlist(numeric) , METHOD(string) ///
         [ ACTION(string) ///

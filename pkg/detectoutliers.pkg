@@ -4,7 +4,9 @@ d
 d Detection and handling of outliers in numeric variables with trend analysis
 d using either Z-score or IQR methods.
 d
-d Author: Your Name
+d Requires Stata version 14 or newer
+d
+d Author: Cao Han, Li Minfeng, Jordan Rayman Thomas
 d Distribution-Date: 20241022
 d
 F detectoutliers.ado
