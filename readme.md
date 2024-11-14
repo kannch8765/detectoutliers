@@ -47,6 +47,15 @@ net install detectoutliers, from(https://raw.githubusercontent.com/kannch8765/de
 * Or manually copy files to your personal ado directory:
   * detectoutliers.ado
   * detectoutliers.sthlp
+ 
+## Troubleshooting
+* Issue: Command Not Found
+If Stata says the command is not recognized, try refreshing the ADO path:
+```stata
+clear all
+adopath + "C:\Users\yourname\ado\personal\"  // Replace with your actual path
+```
+And reinstall the package.
 
 ## Sample Usage
 ```stata
