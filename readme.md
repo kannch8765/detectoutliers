@@ -40,11 +40,11 @@ Options:
 
 ## Installation
 * Use `net install` from GitHub 
-net install detectoutliers, from(https://raw.githubusercontent.com/yourusername/detectoutliers/master/)
+net install detectoutliers, from(https://raw.githubusercontent.com/kannch8765/detectoutliers/master/)
 
 * Or manually copy files to your personal ado directory:
- - detectoutliers.ado
- - detectoutliers.sthlp
+  * detectoutliers.ado
+  * detectoutliers.sthlp
 
 ## Sample Usage
 ```
