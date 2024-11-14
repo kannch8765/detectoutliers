@@ -1,4 +1,4 @@
-# detectoutliers: A Stata Command for Outlier Detection
+# detectoutliers: A Stata package for Outlier Detection
 
 ## Overview
 `detectoutliers` is a custom Stata command (requires Stata 14 or newer) designed to detect and handle outliers in numeric variables with automatic trend detection and data type recognition. It supports two popular methods for outlier detection:
@@ -43,8 +43,8 @@ Options:
 net install detectoutliers, from(https://raw.githubusercontent.com/yourusername/detectoutliers/master/)
 
 * Or manually copy files to your personal ado directory:
-* - detectoutliers.ado
-* - detectoutliers.sthlp
+ - detectoutliers.ado
+ - detectoutliers.sthlp
 
 ## Sample Usage
 ```
