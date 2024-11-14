@@ -37,3 +37,40 @@ Options:
     force                 optional; override certain safety checks
     nodropmissing        optional; include missing values in analysis
 ```
+
+## Installation
+* Use `net install` from GitHub 
+net install detectoutliers, from(https://raw.githubusercontent.com/yourusername/detectoutliers/master/)
+
+* Or manually copy files to your personal ado directory:
+* - detectoutliers.ado
+* - detectoutliers.sthlp
+
+## Sample Usage
+```
+* Basic usage with Z-score method
+detectoutliers income, method(zscore)
+
+* IQR method with visualization
+detectoutliers income, method(iqr) visualize(scatter)
+
+* Multiple variables with custom options
+detectoutliers income age weight, method(zscore) action(flag) visualize(box) replace
+
+* Handle missing values differently
+detectoutliers income, method(iqr) nodropmissing
+```
+
+## Output
+The command provides:
+1. Data type detection results
+2. Trend analysis results (if significant trend detected)
+3. Summary statistics:
+   - Number of outliers
+   - Percentage of outliers
+   - Upper and lower thresholds
+4. Optional visualization
+5. Detailed distribution statistics for normal and outlier groups
+
+## Author
+Cao Han, Li Minfeng, Jordan Rayman Thomas
